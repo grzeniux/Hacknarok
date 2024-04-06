@@ -1,6 +1,8 @@
+#include <Arduino.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <Adafruit_BMP280.h>
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "hardware/adc.h"
@@ -19,6 +21,17 @@
 #define SCREEN_WIDTH 128 // OLED display width,  in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 #define ADC_PIN 26
+
+//Enc
+#define ENCODER_PIN_A 2
+#define ENCODER_PIN_B 3
+
+Adafruit_BMP280 bmp;
+
+
+
+volatile int encoder_count = 0;
+volatile int last_encoder_count = 0;
 
 // declare an SSD1306 display object connected to I2C
 Adafruit_SSD1306 oled(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
@@ -66,6 +79,15 @@ void setup()
   compass.init();
   compass.setCalibration(-1835, 405, -1497, 1178, -2366, 672);
 
+  //ENC
+  pinMode(ENCODER_PIN_A, INPUT_PULLUP);
+  pinMode(ENCODER_PIN_B, INPUT_PULLUP);
+
+  unsigned status;
+  status = bmp.begin(0x76);
+
+  attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_A), encoder_isr, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_B), encoder_isr, CHANGE);
   // initialize OLED display with address 0x3C for 128x64
   if (!oled.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
     Serial.println(F("SSD1306 allocation failed"));
@@ -82,14 +104,55 @@ void setup()
   oled.setCursor(0, 10);        // position to display
   // oled.println("Hello World!"); // text to display
   oled.display();               // show on OLED
+
+  bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,     /* Operating Mode. */
+                  Adafruit_BMP280::SAMPLING_X2,     /* Temp. oversampling */
+                  Adafruit_BMP280::SAMPLING_X16,    /* Pressure oversampling */
+                  Adafruit_BMP280::FILTER_X16,      /* Filtering. */
+                  Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
+
+  last_encoder_count = encoder_count;
 }
 
 void loop() {
 
-  measureTemperature();
-  GPS();
-  CompassThings();
-  
+  //measureTemperature();
+  //GPS();
+  //CompassThings();
+   int menu_option = encoder_count % 3 + 1;
+
+    switch (menu_option) {
+        case 1:
+          measureTemperature();
+            // display.clearDisplay();
+            // display.setCursor(0, 0);
+            // // display.println("Option 1 selected");
+            // display.print("Temp = ");
+            // display.print(bmp.readTemperature());
+            // display.print("Pres = ");
+            // display.print(bmp.readPressure());
+            // display.print("Approx altitude = ");
+            // display.print(bmp.readTemperature());
+            // display.display();
+            break;
+        case 2:
+          GPS();
+            // display.clearDisplay();
+            // display.setCursor(0, 0);
+            // display.println("Option 2 selected");
+            // display.display();
+            break;
+          case 3:
+            CompassThings();
+            // display.clearDisplay();
+            // display.setCursor(0, 0);
+            // display.println("Option 3 selected");
+            // display.display();
+            break;
+        default:
+            break;
+    }
+    delay(100);
 }
 
 void delayCustom(unsigned int msDelay){
@@ -99,6 +162,17 @@ void delayCustom(unsigned int msDelay){
   }
 
 }
+
+void encoder_isr() {
+    static int8_t prev_AB = 0;
+    static int8_t seq[4] = {0, -1, 1, 0};
+    int8_t current_AB = (digitalRead(ENCODER_PIN_A) << 1) | digitalRead(ENCODER_PIN_B);
+    int8_t encoder_increment = seq[(prev_AB << 2) | current_AB];
+    encoder_count += encoder_increment;
+    prev_AB = current_AB;
+
+}
+
 void measureTemperature() {
   // Read analog voltage from thermistor
   int Vo = analogRead(Termistor);
