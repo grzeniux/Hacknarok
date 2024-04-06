@@ -69,6 +69,7 @@ const byte qmc5883l_osr_64    = 0xC0;
 
 QMC5883LCompass compass;
 
+volatile float FC;
 
 void setup() 
 {
@@ -123,7 +124,20 @@ void loop() {
 
     switch (menu_option) {
         case 1:
+        //do{
           measureTemperature();
+          oled.setTextSize(1);         
+         oled.setTextColor(WHITE);    
+        oled.setCursor(0, 0);       
+        oled.println("Temp: ");                                                           // show_temp
+        oled.setCursor(30, 0);        
+        oled.print(Tc); 
+        oled.println(" C"); 
+
+        oled.println(); 
+        oled.display(); 
+        oled.clearDisplay();
+        //}while (menu_option == 1);
             // display.clearDisplay();
             // display.setCursor(0, 0);
             // // display.println("Option 1 selected");
@@ -136,14 +150,19 @@ void loop() {
             // display.display();
             break;
         case 2:
-          GPS();
+         //do{
+          //  GPS();
+          //}while(menu_option==2);
+
             // display.clearDisplay();
             // display.setCursor(0, 0);
             // display.println("Option 2 selected");
             // display.display();
             break;
           case 3:
+           //do{
             CompassThings();
+            //}while (menu_option ==3);
             // display.clearDisplay();
             // display.setCursor(0, 0);
             // display.println("Option 3 selected");
@@ -183,7 +202,7 @@ void measureTemperature() {
   // Calculate temperature in Celsius
   float logR2 = log(R2);
   float T = 1.0 / (c1 + c2*logR2 + c3*logR2*logR2*logR2);
-  float Tc = T - 273.15;
+  Tc = T - 273.15;
   
   // Convert temperature to Fahrenheit
   float Tf = (Tc * 9.0) / 5.0 + 32.0;
@@ -195,17 +214,6 @@ void measureTemperature() {
   // Serial.print(Tc); // Temperatura w stopniach Celsjusza
   // Serial.println(" C"); // Znak Stopni Celsjusza 
   
-  oled.setTextSize(1);         
-  oled.setTextColor(WHITE);    
-  oled.setCursor(0, 0);       
-  oled.println("Temp: ");                                                           // show_temp
-  oled.setCursor(30, 0);        
-  oled.print(Tc); 
-  oled.println(" C"); 
-
-  oled.println(); 
-  oled.display(); 
-  oled.clearDisplay();
   delayCustom(500);
   
 }
@@ -263,10 +271,10 @@ void GPS()
   // Wyświetlanie szerokości i długości geograficznej na ekranie OLED
   oled.setTextSize(1);         
   oled.setTextColor(WHITE);     
-  oled.setCursor(0, 30);       
+  oled.setCursor(0, 0);       
   oled.print("Lat: ");                                                      // show_lat
   oled.print(gps.location.lat(), 6);
-  oled.setCursor(0, 40);       
+  oled.setCursor(0, 10);       
   oled.print("Lng: ");                                                      // show_lng
   oled.print(gps.location.lng(), 6);
 }
@@ -286,7 +294,7 @@ void CompassThings(){
 
   oled.setTextSize(1);         
   oled.setTextColor(WHITE);     
-  oled.setCursor(0, 50);       
+  oled.setCursor(0, 0);       
   oled.print(direction);
 }
 
