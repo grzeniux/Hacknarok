@@ -21,8 +21,6 @@ void calc_journey(Journey *road, Localisation gps, Localisation destination){
   
   float ref_latitude = destination.latitude - gps.latitude;
   float ref_longitude = destination.longitude - gps.longitude;
-  ref_latitude = roundf(ref_latitude * 1000000) / 1000000;        //rounding number to sixth decimal place after coma
-  ref_longitude = roundf(ref_longitude * 1000000) / 1000000;
   road->distance = hypot(ref_latitude*DEGREES_TO_METERS_LATITUDE, ref_longitude*DEGREES_TO_METERS_LATITUDE)/1000;
   road->duration = road->distance/5.0;
 
