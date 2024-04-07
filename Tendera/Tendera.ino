@@ -69,7 +69,18 @@ const byte qmc5883l_osr_64    = 0xC0;
 
 QMC5883LCompass compass;
 
-volatile float FC;
+float TC;
+
+struct CompassData{
+  int x_value;
+  int y_value;
+  int azimuth;
+  char direction[4];
+};
+
+double lat = 0, lng = 0;
+TinyGPSDate gpsDate;
+TinyGPSTime gpsTime;
 
 void setup() 
 {
@@ -116,62 +127,46 @@ void setup()
 }
 
 void loop() {
-
-  //measureTemperature();
-  //GPS();
-  //CompassThings();
+  CompassData compassData = readCompass();
+    static int last_menu_option = 0;
    int menu_option = encoder_count % 3 + 1;
+    measureTemperature(TC);
+    //updateGPSData();
+    if (menu_option != last_menu_option) {
+      switch (menu_option) {
+          case 1:
+              displayCompassData(compassData);
+              break;
+          case 2:
+              oled.setTextSize(1);
+              oled.setTextColor(WHITE);
+              oled.clearDisplay();
+              oled.setCursor(0,0);
+              oled.print("temp: ");
+              oled.print(TC);
+              oled.print(" C");
+              oled.display();
+              break;
+            case 3:
+            while (menu_option == 3) {
+                    // Kontynuuj wywoływanie GPS() do momentu zmiany menu_option
+                    GPS(); // Zakładając, że funkcja ta wywołuje GPS() i aktualizuje wyświetlacz
 
-    switch (menu_option) {
-        case 1:
-        //do{
-          measureTemperature();
-          oled.setTextSize(1);         
-         oled.setTextColor(WHITE);    
-        oled.setCursor(0, 0);       
-        oled.println("Temp: ");                                                           // show_temp
-        oled.setCursor(30, 0);        
-        oled.print(Tc); 
-        oled.println(" C"); 
+                    // Opcjonalnie: Możesz dodać niewielkie opóźnienie, aby nie zablokować całkowicie pętli
+                    delay(10);
 
-        oled.println(); 
-        oled.display(); 
-        oled.clearDisplay();
-        //}while (menu_option == 1);
-            // display.clearDisplay();
-            // display.setCursor(0, 0);
-            // // display.println("Option 1 selected");
-            // display.print("Temp = ");
-            // display.print(bmp.readTemperature());
-            // display.print("Pres = ");
-            // display.print(bmp.readPressure());
-            // display.print("Approx altitude = ");
-            // display.print(bmp.readTemperature());
-            // display.display();
-            break;
-        case 2:
-         //do{
-          //  GPS();
-          //}while(menu_option==2);
+                    // Sprawdź, czy menu_option zmieniło się podczas wykonania pętli
+                    int current_encoder_position = menu_option; // Załóżmy, że masz funkcję do odczytu pozycji enkodera
+                    menu_option = current_encoder_position % 3 + 1;
+                }
 
-            // display.clearDisplay();
-            // display.setCursor(0, 0);
-            // display.println("Option 2 selected");
-            // display.display();
-            break;
-          case 3:
-           //do{
-            CompassThings();
-            //}while (menu_option ==3);
-            // display.clearDisplay();
-            // display.setCursor(0, 0);
-            // display.println("Option 3 selected");
-            // display.display();
-            break;
-        default:
-            break;
+              oled.display();
+              break;
+          default:
+              break;
+      }
+      delay(100);
     }
-    delay(100);
 }
 
 void delayCustom(unsigned int msDelay){
@@ -192,7 +187,7 @@ void encoder_isr() {
 
 }
 
-void measureTemperature() {
+void measureTemperature(float &TC) {
   // Read analog voltage from thermistor
   int Vo = analogRead(Termistor);
   
@@ -202,7 +197,7 @@ void measureTemperature() {
   // Calculate temperature in Celsius
   float logR2 = log(R2);
   float T = 1.0 / (c1 + c2*logR2 + c3*logR2*logR2*logR2);
-  Tc = T - 273.15;
+  TC = T - 273.15;
   
   // Convert temperature to Fahrenheit
   float Tf = (Tc * 9.0) / 5.0 + 32.0;
@@ -213,9 +208,7 @@ void measureTemperature() {
   // Serial.print(" F; "); // Znak stopni Farenheita
   // Serial.print(Tc); // Temperatura w stopniach Celsjusza
   // Serial.println(" C"); // Znak Stopni Celsjusza 
-  
   delayCustom(500);
-  
 }
 
 
@@ -270,15 +263,14 @@ void GPS()
 
   // Wyświetlanie szerokości i długości geograficznej na ekranie OLED
   oled.setTextSize(1);         
-  oled.setTextColor(WHITE);     
-  oled.setCursor(0, 0);       
+  oled.setTextColor(WHITE);  
+  oled.setCursor(0, 20);       
   oled.print("Lat: ");                                                      // show_lat
   oled.print(gps.location.lat(), 6);
-  oled.setCursor(0, 10);       
+  oled.setCursor(0, 30);       
   oled.print("Lng: ");                                                      // show_lng
   oled.print(gps.location.lng(), 6);
 }
-
 
 void CompassThings(){
   int x_value;
@@ -294,12 +286,30 @@ void CompassThings(){
 
   oled.setTextSize(1);         
   oled.setTextColor(WHITE);     
-  oled.setCursor(0, 0);       
+  oled.setCursor(0, 50);       
   oled.print(direction);
 }
 
+CompassData readCompass(){
+  CompassData data;
+  compass.read();
+  data.x_value=compass.getX();
+  data.y_value=compass.getY();
+  data.azimuth = compass.getAzimuth();
+  compass.getDirection(data.direction, data.azimuth);
+  data.direction[3]='\0';
 
+  return data;
+}
 
+void displayCompassData(const CompassData& data){
+  oled.setTextSize(1);
+  oled.setTextColor(WHITE);
+  oled.clearDisplay();
+  oled.setCursor(0,0);
+  oled.print(data.direction);
+  oled.display();
+}
 ///////////////// FUNKCJE DO GPS'A /////////////
 static void smartDelay(unsigned long ms)
 {
@@ -351,8 +361,9 @@ static void printDateTime(TinyGPSDate &d, TinyGPSTime &t)
   {
     Serial.println(F("********** "));
     oled.setTextSize(1);         
-    oled.setTextColor(WHITE);     
-    oled.setCursor(0, 30);       
+    oled.setTextColor(WHITE);
+    oled.clearDisplay();     
+    oled.setCursor(0, 0);       
     oled.println("No valid data"); 
   }
   else
@@ -361,8 +372,9 @@ static void printDateTime(TinyGPSDate &d, TinyGPSTime &t)
     sprintf(dateStr, "%02d/%02d/%02d ", d.month(), d.day(), d.year());
     Serial.print(dateStr);
     oled.setTextSize(1);         
-    oled.setTextColor(WHITE);     
-    oled.setCursor(0, 10);       
+    oled.setTextColor(WHITE); 
+    oled.clearDisplay();    
+    oled.setCursor(0,0);       
     oled.print(dateStr);                                                   // show_date
     
     char timeStr[12];
@@ -370,7 +382,7 @@ static void printDateTime(TinyGPSDate &d, TinyGPSTime &t)
     Serial.print(timeStr);
     oled.setTextSize(1);         
     oled.setTextColor(WHITE);     
-    oled.setCursor(0, 20);       
+    oled.setCursor(0, 10);       
     oled.print(timeStr);                                                  // show_time
   }
 
@@ -386,23 +398,3 @@ static void printStr(const char *str, int len)
   smartDelay(0);
 }
 
-//////////////// PRINTOWANIE NA WYSWIETLACZU /////////////////
-
-void displayGPS()
-{
-  oled.setTextSize(1);         
-  oled.setTextColor(WHITE);     
-  oled.setCursor(0, 30);       
-  oled.println("Latitude: "); 
-
-  oled.setCursor(0, 60);        
-  oled.println("Longitude: "); 
-  //oled.print(gps.location.lng); 
-
-
-  oled.println(" C"); //Znak Stopni Celsjusza 
-
-}
-
-
-////////////////////////////////////////////////////////////
