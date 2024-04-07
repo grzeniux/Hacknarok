@@ -1,9 +1,17 @@
+#include <WiFi.h>
+#include <PubSubClient.h>
+
 #include <Arduino.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <Adafruit_BMP280.h>
 #include <stdio.h>
+#include <math.h>
+#include <string.h>
+#include <time.h>
+#include <iostream>
+
 #include "pico/stdlib.h"
 #include "hardware/adc.h"
 
@@ -26,8 +34,26 @@
 #define ENCODER_PIN_A 2
 #define ENCODER_PIN_B 3
 
+#define MAX_VILLAGE_NAME_LENGTH 15
+#define DEGREES_TO_METERS_LATITUDE 78710 
+#define DEGREES_TO_METERS_LONGITUDE 78605 
+
 Adafruit_BMP280 bmp;
 
+// const char* ssid = "Essa";
+// const char* password = "alejaja123";
+
+const char* ssid = "KPT-Conference";
+const char* password = "E2ue6Tm&";
+
+// MQTT broker settings
+const char* mqtt_server = "broker.hivemq.com";
+const int mqtt_port = 1883;
+const char* mqtt_topic_publish = "botfreaks/mqttfxtest/data";
+const char* mqtt_topic_subscribe = "botfreaks/mqttfxtest/commands";
+
+WiFiClient espClient;
+PubSubClient client(espClient);
 
 
 volatile int encoder_count = 0;
@@ -71,6 +97,33 @@ QMC5883LCompass compass;
 
 float TC;
 
+const char *villages[12]  = {"Klakegg",
+    "Refvik",
+    "Skei",
+    "Skelige",
+    "Utvik",
+    "Vassenden",
+    "Bjornheim",
+    "Jotunheim",
+    "Yggdrasil",
+    "Midgardr",
+    "Valhalla",
+    "Njordvik"
+};
+
+struct Localisation {
+    float longitude;
+    float latitude;
+    char villageName[MAX_VILLAGE_NAME_LENGTH];
+};
+
+struct Journey {
+    float duration;
+    float distance;
+    char direction[3];
+};
+
+
 struct CompassData{
   int x_value;
   int y_value;
@@ -81,7 +134,14 @@ struct CompassData{
 double lat = 0, lng = 0;
 TinyGPSDate gpsDate;
 TinyGPSTime gpsTime;
+Localisation local;
+Localisation pineska = {50.0674, 19.9128, "Miasteczko"};
+    double minLatitude = 49.955, maxLatitude = 50.05;
+    double minLongitude = 19.81, maxLongitude = 20.23;
+    int randValue = 0+rand()%(11-0+1);
+  Journey road;
 
+    
 void setup() 
 {
   Serial.begin(115200);
@@ -124,6 +184,35 @@ void setup()
                   Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
 
   last_encoder_count = encoder_count;
+
+
+
+     ///// // Connect to Wi-Fi   ///////////////////////
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+  }
+  Serial.println("");
+  Serial.println("WiFi connected");
+
+  // Connect to MQTT broker
+  client.setServer(mqtt_server, mqtt_port);
+  while (!client.connected()) {
+    Serial.println("Connecting to MQTT...");
+    if (client.connect("ESP32_C6")) {
+      Serial.println("Connected to MQTT broker");
+    } else {
+      Serial.print("Failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      delay(5000);
+    }
+  }
+    srand((unsigned int)time(NULL));
+    local.latitude=generate_random(minLatitude, maxLatitude);
+    local.longitude=generate_random(minLongitude, maxLongitude);
+    strcpy(local.villageName, villages[randValue]);
+  
 }
 
 void loop() {
@@ -132,10 +221,37 @@ void loop() {
    int menu_option = encoder_count % 3 + 1;
     measureTemperature(TC);
     //updateGPSData();
+    calc_journey(&road,pineska,local);
     if (menu_option != last_menu_option) {
       switch (menu_option) {
           case 1:
-              displayCompassData(compassData);
+              
+                oled.setTextSize(1);
+                oled.setTextColor(WHITE);
+                oled.clearDisplay();
+                oled.setCursor(0,0);
+                oled.print("Comp:");
+                oled.setCursor(70,0);
+                oled.print("Dir: ");
+                displayCompassData(compassData);
+                oled.setCursor(70,10);
+                oled.println(road.direction);
+                oled.setCursor(0,20);
+                oled.print("Village: ");
+                oled.println(local.villageName);
+                // oled.setCursor(0,20);
+                // oled.print("Lat: ");
+                // oled.println(local.latitude);
+                // oled.setCursor(0,30);
+                // oled.print("Long: ");
+                // oled.println(local.longitude);
+                oled.setCursor(0,30);
+                oled.print("Time: ");
+                oled.println(road.duration);
+                oled.setCursor(0,40);
+                oled.print("Distance: ");
+                oled.println(road.distance);
+                oled.display();
               break;
           case 2:
               oled.setTextSize(1);
@@ -167,6 +283,111 @@ void loop() {
       }
       delay(100);
     }
+
+  ///////////////////// MQTT ///////////
+  client.loop();
+
+  // Publish sample data every 5 seconds
+  static unsigned long lastMsg = 0;
+if (millis() - lastMsg > 5000) 
+{
+  lastMsg = millis();
+
+
+  String black_string = String(20);
+  String red_string = String(40);
+
+  client.publish("black", black_string.c_str());
+  client.publish("red", red_string.c_str());
+
+
+  // char tempString[8];
+  // dtostrf(measureTemperature(TC), 2, 2, tempString);
+  // client.publish("temperature", tempString);
+
+  // float measureTemp = measureTemperature();
+  float pressureValue = bmp.readPressure();
+  float Temperature_BMP = bmp.readTemperature();
+
+  String pressureString = String(pressureValue, 3);
+  String temperatureString_BMP = String(Temperature_BMP, 2);
+  // String measureTemperature = String(measureTemp,2)
+
+  client.publish("Pressure", pressureString.c_str()); 
+  client.publish("Temperature_BMP", temperatureString_BMP.c_str());
+  // client.publish("Measure_Temp", measureTemperature.c_str());
+
+
+
+  static unsigned long lastGpsMsg = 0;
+
+  String latitudeString = String(gps.location.lat(), 6);
+  String longitudeString = String(gps.location.lng(), 6);
+
+  client.publish("Latitude", latitudeString.c_str()); 
+  client.publish("Longitude", longitudeString.c_str());
+
+///////////////////////// NTC //////////////
+  measureTemperature(TC);
+  float temperature = TC;
+  String temperatureString = String(temperature, 2);
+  client.publish("Temperature", temperatureString.c_str());
+  
+////////////////// COMPASS ///////////////
+  String compassDataString = String(compassData.azimuth) + "," + 
+                             String(compassData.direction);
+
+  client.publish("CompassData", compassDataString.c_str());
+
+
+ // Odczytaj czas z GPS
+String timeStr;
+if (gps.time.isValid()) {
+    int hour = gps.time.hour();
+    int minute = gps.time.minute();
+    int second = gps.time.second();
+
+    // Formatuj godzinę, minutę i sekundę jako dwucyfrowe
+    timeStr = String(hour < 10 ? "0" + String(hour) : String(hour)) + ":" +
+              String(minute < 10 ? "0" + String(minute) : String(minute)) + ":" +
+              String(second < 10 ? "0" + String(second) : String(second));
+} else {
+    timeStr = "Invalid";
+}
+
+// Wysłanie danych do MQTT
+client.publish("GPS/Time", timeStr.c_str());
+
+
+
+
+
+// Odczytaj datę z GPS
+String dateStr;
+if (gps.date.isValid()) {
+    dateStr = String(gps.date.month()) + "/" + String(gps.date.day()) + "/" + String(gps.date.year());
+} else {
+    dateStr = "Invalid";
+}
+
+// Wysłanie danych do MQTT
+client.publish("GPS/Date", dateStr.c_str());
+
+
+
+//////////// GPS ///////////
+
+float courseValue = gps.course.deg();
+bool courseValid = gps.course.isValid();
+client.publish("GPS/Course", String(courseValue, 2).c_str());
+
+int satellitesValue = gps.satellites.value();
+bool satellitesValid = gps.satellites.isValid();
+client.publish("GPS/Satellites", String(satellitesValue).c_str());
+
+
+  } /// END IF MILLIS()
+
 }
 
 void delayCustom(unsigned int msDelay){
@@ -303,12 +524,9 @@ CompassData readCompass(){
 }
 
 void displayCompassData(const CompassData& data){
-  oled.setTextSize(1);
-  oled.setTextColor(WHITE);
-  oled.clearDisplay();
-  oled.setCursor(0,0);
+  oled.setCursor(0,10);
   oled.print(data.direction);
-  oled.display();
+  //oled.display();
 }
 ///////////////// FUNKCJE DO GPS'A /////////////
 static void smartDelay(unsigned long ms)
@@ -398,3 +616,34 @@ static void printStr(const char *str, int len)
   smartDelay(0);
 }
 
+void calc_journey(Journey *road, Localisation gps, Localisation destination){
+  
+  float ref_latitude = destination.latitude - gps.latitude;
+  float ref_longitude = destination.longitude - gps.longitude;
+  road->distance = hypot(ref_latitude*DEGREES_TO_METERS_LATITUDE, ref_longitude*DEGREES_TO_METERS_LATITUDE)/1000;
+  road->duration = road->distance/5.0;
+
+
+
+  if (ref_latitude == 0) {
+    // Handle cases when ref_latitude is 0
+    if (ref_longitude > 0) road->direction[0] = 'E';
+    else if (ref_longitude < 0) road->direction[0] = 'W';
+  } 
+  else if (ref_longitude == 0) {
+    // Handle cases when ref_latitude is 0
+    if (ref_latitude > 0) road->direction[0] = 'N';
+    else if (ref_latitude < 0) road->direction[0] = 'S';
+  } 
+  else if (ref_latitude > 0){
+    (ref_longitude > 0) ? strcpy(road->direction, "NE") : strcpy(road->direction, "NW");
+  }
+  
+  else{
+    (ref_longitude > 0) ? strcpy(road->direction, "SE") : strcpy(road->direction, "SW");
+  }
+}
+
+double generate_random(double min, double max){
+    return min+(double)rand()/((double)RAND_MAX / (max-min));
+}
