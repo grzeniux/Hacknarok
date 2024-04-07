@@ -12,7 +12,7 @@ struct Localisation {
 
 
 struct Journey {
-    float time;
+    float duration;
     float distance;
     char direction[3];
 };
@@ -23,9 +23,9 @@ void calc_journey(Journey *road, Localisation gps, Localisation destination){
   float ref_longitude = destination.longitude - gps.longitude;
   ref_latitude = roundf(ref_latitude * 1000000) / 1000000;        //rounding number to sixth decimal place after coma
   ref_longitude = roundf(ref_longitude * 1000000) / 1000000;
-
   road->distance = hypot(ref_latitude*DEGREES_TO_METERS_LATITUDE, ref_longitude*DEGREES_TO_METERS_LATITUDE)/1000;
-  //road->time = hypot(ref_latitude*DEGREES_TO_METERS_LATITUDE, ref_longitude*DEGREES_TO_METERS_LATITUDE)/1000;
+  road->duration = road->distance/5.0;
+
 
   if (ref_latitude == 0) {
     // Handle cases when ref_latitude is 0
@@ -52,11 +52,7 @@ int main() {
   // Example values for gps and destination objects
   Localisation gps = {40.7128, -74.0060, "New York City"};
   Localisation destination = {34.0522, -118.2437, "Los Angeles"};
-
-
   Journey road;     //travel, route
- // road.time = 10.5; // Example time
-  //road.distance = 200.0; // Example distance
   calc_journey(&road, gps, destination);
 ;
 // Serial.print(); // Print voltage with 2 decimal places    
